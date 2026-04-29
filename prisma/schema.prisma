@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Anime {
@@ -68,6 +67,7 @@ model User {
   id            String     @id @default(cuid())
   email         String     @unique
   username      String     @unique
+  password      String?
   name          String?
   image         String?
   role          String     @default("USER") // USER, ADMIN
@@ -78,6 +78,7 @@ model User {
   bookmarks     Bookmark[]
   watchHistory  WatchHistory[]
   sessions      Session[]
+  accounts      Account[]
 }
 
 model Session {

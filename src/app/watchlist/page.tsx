@@ -45,7 +45,7 @@ export default async function WatchlistPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {bookmarks.map(({ anime }) => (
+            {bookmarks.map(({ anime }: { anime: { id: string; title: string; image: string; status: string; episodes: number; type: string; rating: number } }) => (
               <div key={anime.id} className="group relative">
                 <Link href={`/anime/${anime.id}`}>
                   <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-surface">

@@ -9,16 +9,17 @@ interface PageProps {
 export default async function WatchPage({ params }: PageProps) {
   const { animeId, episodeId } = await params;
 
-  const episode = await prisma.episode.findFirst({
-    where: { animeId, number: parseInt(episodeId) },
+  const anime = await prisma.anime.findUnique({
+    where: { id: animeId },
     include: {
-      anime: {
-        include: {
-          episodeList: { orderBy: { number: 'asc' } },
-        },
-      },
+      episodeList: { orderBy: { number: 'asc' } },
     },
   });
+
+  if (!anime) notFound();
+
+  const episodeNum = parseInt(episodeId);
+  const episode = anime.episodeList.find((ep: { number: number }) => ep.number === episodeNum);
 
   if (!episode) notFound();
 
@@ -30,9 +31,9 @@ export default async function WatchPage({ params }: PageProps) {
         title: episode.title,
         videoUrl: episode.videoUrl,
         consumetId: episode.consumetId,
-        animeId: episode.animeId,
-        animeName: episode.anime.title,
-        episodes: episode.anime.episodeList.map((ep) => ({
+        animeId: anime.id,
+        animeName: anime.title,
+        episodes: anime.episodeList.map((ep: { id: string; number: number; title: string; thumbnail: string | null; duration: string | null; consumetId: string | null }) => ({
           id: ep.id,
           number: ep.number,
           title: ep.title,

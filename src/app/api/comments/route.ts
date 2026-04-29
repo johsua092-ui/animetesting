@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const mapped = comments.map((c) => ({
+    const mapped = comments.map((c: { id: string; content: string; likes: number; createdAt: Date; user: { username: string } }) => ({
       id: c.id,
       content: c.content,
       username: c.user.username,
