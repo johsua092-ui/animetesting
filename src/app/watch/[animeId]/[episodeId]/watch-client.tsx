@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PusherClient from 'pusher-js';
-import Hls from 'hls.js';
 import {
   ChevronLeft, MessageSquare, ThumbsUp, Share2,
   SkipBack, SkipForward, Users, Wifi, WifiOff, Play, Loader2,
@@ -44,28 +43,39 @@ interface Comment {
 
 function VideoPlayer({ src, title }: { src: string; title: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
+  const hlsRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!videoRef.current) return;
-    
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
+    if (!videoRef.current || typeof window === 'undefined') return;
 
-    if (Hls.isSupported() && src.includes('.m3u8')) {
+    const videoEl = videoRef.current;
+    
+    const initHls = async () => {
+      const Hls = (await import('hls.js')).default;
+      if (!Hls.isSupported()) {
+        if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+          videoEl.src = src;
+          videoEl.play().catch(() => {});
+        }
+        return;
+      }
+
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
       });
       hlsRef.current = hls;
       hls.loadSource(src);
-      hls.attachMedia(videoRef.current);
+      hls.attachMedia(videoEl);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        videoRef.current?.play().catch(() => {});
+        videoEl.play().catch(() => {});
       });
-      hls.on(Hls.Events.ERROR, (event, data) => {
+      hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
         console.error('HLS error:', data);
         if (data.fatal) {
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
@@ -77,9 +87,13 @@ function VideoPlayer({ src, title }: { src: string; title: string }) {
           }
         }
       });
-    } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      videoRef.current.src = src;
-      videoRef.current.play().catch(() => {});
+    };
+
+    if (src.includes('.m3u8')) {
+      initHls();
+    } else {
+      videoEl.src = src;
+      videoEl.play().catch(() => {});
     }
 
     return () => {
