@@ -104,11 +104,13 @@ export default function WatchPage() {
     const initHls = async () => {
       const HlsModule = await import('hls.js');
       const Hls = HlsModule.default;
+      const videoEl = videoRef.current;
+      if (!videoEl) return;
 
       if (!Hls.isSupported()) {
-        if (videoRef.current?.canPlayType('application/vnd.apple.mpegurl')) {
-          videoRef.current.src = streamUrl;
-          videoRef.current.play().catch(() => {});
+        if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+          videoEl.src = streamUrl;
+          videoEl.play().catch(() => {});
         }
         return;
       }
@@ -118,9 +120,9 @@ export default function WatchPage() {
       const hls = new Hls({ enableWorker: true });
       hlsRef.current = hls;
       hls.loadSource(streamUrl);
-      hls.attachMedia(videoRef.current);
+      hls.attachMedia(videoEl);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (!destroyed) videoRef.current?.play().catch(() => {});
+        if (!destroyed) videoEl.play().catch(() => {});
       });
       hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
         if (data.fatal) {
