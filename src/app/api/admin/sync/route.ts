@@ -1,17 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { syncAll, syncAllWithEpisodes } from '@/lib/jikan-sync';
+import { NextResponse } from 'next/server';
+import { syncAll } from '@/lib/jikan-sync';
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
-    const searchParams = req.nextUrl.searchParams;
-    const withEpisodes = searchParams.get('episodes') === 'true';
-    
-    if (withEpisodes) {
-      const result = await syncAllWithEpisodes();
-      return NextResponse.json(result);
-    }
-    
-    const result = await syncAll();
+    const result = await syncAll(true);
     return NextResponse.json(result);
   } catch (error) {
     console.error('[api/admin/sync]', error);

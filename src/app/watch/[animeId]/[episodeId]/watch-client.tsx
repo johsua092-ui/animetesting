@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PusherClient from 'pusher-js';
+import Hls from 'hls.js';
 import {
   ChevronLeft, MessageSquare, ThumbsUp, Share2,
   SkipBack, SkipForward, Users, Wifi, WifiOff, Play, Loader2,
@@ -39,6 +40,65 @@ interface Comment {
   username: string;
   createdAt: string;
   likes: number;
+}
+
+function VideoPlayer({ src, title }: { src: string; title: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (Hls.isSupported() && src.includes('.m3u8')) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+      });
+      hlsRef.current = hls;
+      hls.loadSource(src);
+      hls.attachMedia(videoRef.current);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoRef.current?.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        console.error('HLS error:', data);
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            hls.startLoad();
+          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          } else {
+            hls.destroy();
+          }
+        }
+      });
+    } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+      videoRef.current.src = src;
+      videoRef.current.play().catch(() => {});
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [src]);
+
+  return (
+    <video
+      ref={videoRef}
+      className="w-full h-full"
+      controls
+      playsInline
+      title={title}
+    />
+  );
 }
 
 export function WatchClient({ episode }: WatchClientProps) {
@@ -217,17 +277,10 @@ export function WatchClient({ episode }: WatchClientProps) {
                   <p className="text-muted">Memuat stream...</p>
                 </div>
               ) : finalVideoUrl ? (
-                <video
-                  key={finalVideoUrl}
-                  className="w-full h-full"
-                  controls
-                  autoPlay
-                  playsInline
+                <VideoPlayer
+                  src={finalVideoUrl}
                   title={`${animeName} Episode ${currentNumber}`}
-                >
-                  <source src={finalVideoUrl} type="application/x-mpegURL" />
-                  Your browser does not support the video tag.
-                </video>
+                />
               ) : streamError ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface">
                   <Play className="w-16 h-16 text-muted mb-3" />

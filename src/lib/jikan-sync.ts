@@ -68,7 +68,7 @@ export function mapJikanToAnime(data: JikanAnimeResponse) {
   };
 }
 
-async function syncFromEndpoint(endpoint: string): Promise<SyncResult> {
+async function syncFromEndpoint(endpoint: string, syncEpisodes: boolean = false): Promise<SyncResult> {
   const result: SyncResult = { synced: 0, errors: 0, total: 0 };
 
   try {
@@ -85,7 +85,7 @@ async function syncFromEndpoint(endpoint: string): Promise<SyncResult> {
     for (const item of items) {
       try {
         const data = mapJikanToAnime(item);
-        await prisma.anime.upsert({
+        const anime = await prisma.anime.upsert({
           where: { malId: data.malId },
           update: {
             title: data.title,
@@ -103,6 +103,12 @@ async function syncFromEndpoint(endpoint: string): Promise<SyncResult> {
           create: data,
         });
         result.synced++;
+
+        if (syncEpisodes) {
+          const epResult = await syncEpisodesFromConsumet(anime.id, anime.title);
+          console.log(`[jikan-sync] Episodes for ${anime.title}: ${epResult.synced} synced, ${epResult.errors} errors`);
+          await delay(500);
+        }
       } catch (err) {
         console.error(`[jikan-sync] Error upserting malId=${item.mal_id}:`, err);
         result.errors++;
@@ -117,18 +123,18 @@ async function syncFromEndpoint(endpoint: string): Promise<SyncResult> {
   return result;
 }
 
-export async function syncTopAnime(): Promise<SyncResult> {
-  return syncFromEndpoint('/top/anime?limit=25');
+export async function syncTopAnime(syncEpisodes: boolean = false): Promise<SyncResult> {
+  return syncFromEndpoint('/top/anime?limit=25', syncEpisodes);
 }
 
-export async function syncSeasonalAnime(): Promise<SyncResult> {
-  return syncFromEndpoint('/seasons/now?limit=25');
+export async function syncSeasonalAnime(syncEpisodes: boolean = false): Promise<SyncResult> {
+  return syncFromEndpoint('/seasons/now?limit=25', syncEpisodes);
 }
 
-export async function syncAll(): Promise<SyncResult> {
+export async function syncAll(syncEpisodes: boolean = false): Promise<SyncResult> {
   const [top, seasonal] = await Promise.all([
-    syncTopAnime(),
-    syncSeasonalAnime(),
+    syncTopAnime(syncEpisodes),
+    syncSeasonalAnime(syncEpisodes),
   ]);
 
   return {
