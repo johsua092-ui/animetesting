@@ -1,21 +1,36 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { searchAnime, getAnimeInfo, ConsumetEpisode } from '@/lib/consumet';
+import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
 const JIKAN_BASE = 'https://api.jikan.moe/v4';
 
-export async function GET() {
-  return POST();
-}
-
-export async function POST(req?: NextRequest) {
+export async function POST() {
   try {
-    const result = { animeSynced: 0, episodeSynced: 0, errors: 0 };
+    const [airingRes, upcomingRes] = await Promise.all([
+      fetch(`${JIKAN_BASE}/top/anime?limit=10`),
+      fetch(`${JIKAN_BASE}/seasons/now?limit=10`),
+    ]);
 
-    // 1. Fetch top anime from Jikan (only 10 for speed)
-    const jikanRes = await fetch(`${JIKAN_BASE}/top/anime?limit=10&filter=airing`);
-    const jikanJson = await jikanRes.json();
-    const items = jikanJson.data ?? [];
+    const [airingJson, upcomingJson] = await Promise.all([
+      airingRes.json(),
+      upcomingRes.json(),
+    ]);
+
+    const allItems = [
+      ...(airingJson.data || []),
+      ...(upcomingJson.data || []),
+    ];
+
+    // Deduplicate by mal_id
+    const uniqueMap = new Map();
+    for (const item of allItems) {
+      if (!uniqueMap.has(item.mal_id)) {
+        uniqueMap.set(item.mal_id, item);
+      }
+    }
+
+    const items = Array.from(uniqueMap.values());
+    let synced = 0;
+    let errors = 0;
 
     for (const item of items) {
       try {
@@ -27,12 +42,12 @@ export async function POST(req?: NextRequest) {
 
         const image = item.images?.jpg?.large_image_url || item.images?.jpg?.image_url || '';
 
-        const anime = await prisma.anime.upsert({
+        await prisma.anime.upsert({
           where: { malId: item.mal_id },
           update: {
             title, slug, image,
             rating: item.score ?? 0,
-            year: item.year ?? 0,
+            year: item.year ?? new Date().getFullYear(),
             episodes: item.episodes ?? 0,
             duration: item.duration ?? null,
             status,
@@ -43,7 +58,7 @@ export async function POST(req?: NextRequest) {
           },
           create: {
             malId: item.mal_id, title, slug, image,
-            rating: item.score ?? 0, year: item.year ?? 0,
+            rating: item.score ?? 0, year: item.year ?? new Date().getFullYear(),
             episodes: item.episodes ?? 0, duration: item.duration ?? null,
             status, studio: item.studios?.[0]?.name ?? null,
             description: item.synopsis ?? '',
@@ -51,35 +66,13 @@ export async function POST(req?: NextRequest) {
             type: item.type ?? 'TV',
           },
         });
-        result.animeSynced++;
-
-        // 2. Sync episodes from Consumet
-        try {
-          const searchResults = await searchAnime(title);
-          if (searchResults.length > 0) {
-            const info = await getAnimeInfo(searchResults[0].id);
-            if (info?.episodes) {
-              const epCount = Math.min(info.episodes.length, 24); // Limit to 24 eps for speed
-              for (let i = 0; i < epCount; i++) {
-                const ep = info.episodes[i];
-                await prisma.episode.upsert({
-                  where: { animeId_number: { animeId: anime.id, number: ep.number } },
-                  update: { title: ep.title || `Episode ${ep.number}`, thumbnail: ep.image, consumetId: ep.id },
-                  create: { animeId: anime.id, number: ep.number, title: ep.title || `Episode ${ep.number}`, thumbnail: ep.image, consumetId: ep.id },
-                });
-                result.episodeSynced++;
-              }
-            }
-          }
-        } catch {
-          result.errors++;
-        }
+        synced++;
       } catch {
-        result.errors++;
+        errors++;
       }
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ animeSynced: synced, errors, message: 'Seeded successfully' });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

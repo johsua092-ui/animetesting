@@ -52,11 +52,33 @@ export default function AnimeDetailPage({ params }: PageProps) {
           notFound();
         } else {
           setAnime(data);
+          // Auto-sync episodes if none exist
+          if (!data.episodeList || data.episodeList.length === 0) {
+            autoSyncEpisodes(data.title, id);
+          }
         }
       })
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  const autoSyncEpisodes = async (title: string, animeId: string) => {
+    try {
+      const res = await fetch('/api/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync', animeTitle: title, animeId }),
+      });
+      const data = await res.json();
+      if (!data.error) {
+        const refreshRes = await fetch(`/api/anime/${id}`);
+        const refreshData = await refreshRes.json();
+        setAnime(refreshData);
+      }
+    } catch {
+      // silent fail - user can manually sync later
+    }
+  };
 
   const handleSyncEpisodes = async () => {
     if (!anime) return;
