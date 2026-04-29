@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { use, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Star, Calendar, Clock, Play, Tv, Film, Loader2, RefreshCw } from 'lucide-react';
@@ -31,8 +31,8 @@ interface Episode {
   image: string | null;
 }
 
-export default function AnimeDetailPage({ params }: { params: Promise<{ malId: string }> }) {
-  const { malId } = use(params);
+export default function AnimeDetailPage() {
+  const { malId } = useParams<{ malId: string }>();
   const router = useRouter();
 
   const [anime, setAnime] = useState<JikanAnime | null>(null);

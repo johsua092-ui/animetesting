@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { use, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Hls from 'hls.js';
 import { Loader2, Play, SkipBack, SkipForward } from 'lucide-react';
 
 const CONSUMET_BASE = 'https://api.consumet.org';
 
-export default function WatchPage({ params }: { params: Promise<{ malId: string; episodeId: string }> }) {
-  const { malId, episodeId } = use(params);
+export default function WatchPage() {
+  const { malId, episodeId } = useParams<{ malId: string; episodeId: string }>();
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<any>(null);
