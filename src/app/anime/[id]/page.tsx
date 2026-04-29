@@ -86,7 +86,7 @@ export default async function AnimeDetailPage({ params }: PageProps) {
 
             {/* Genres */}
             <div className="flex flex-wrap gap-2 mt-3">
-              {anime.genres.map((g) => (
+              {anime.genres.map((g: string) => (
                 <Link
                   key={g}
                   href={`/browse?genre=${encodeURIComponent(g)}`}
