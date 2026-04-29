@@ -13,9 +13,6 @@ export default withAuth(
         if (req.nextUrl.pathname.startsWith('/admin')) {
           return token?.role === 'ADMIN'
         }
-        if (req.nextUrl.pathname.startsWith('/watch')) {
-          return !!token
-        }
         return true
       }
     }
@@ -23,5 +20,5 @@ export default withAuth(
 )
 
 export const config = {
-  matcher: ['/admin/:path*', '/watch/:path*', '/profile/:path*']
+  matcher: ['/admin/:path*']
 }
