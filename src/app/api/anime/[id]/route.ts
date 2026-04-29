@@ -1,0 +1,27 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    
+    const anime = await prisma.anime.findUnique({
+      where: { id },
+      include: {
+        episodeList: { orderBy: { number: 'asc' } },
+      },
+    });
+
+    if (!anime) {
+      return NextResponse.json({ error: 'Anime not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(anime);
+  } catch (error) {
+    console.error('[api/anime/[id] GET]', error);
+    return NextResponse.json({ error: 'Failed to fetch anime' }, { status: 500 });
+  }
+}

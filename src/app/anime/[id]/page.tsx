@@ -1,25 +1,108 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, Calendar, Clock, Play, Tv, Film } from 'lucide-react';
-import prisma from '@/lib/prisma';
+import { Star, Calendar, Clock, Play, Tv, Film, RefreshCw, Loader2 } from 'lucide-react';
 import { BookmarkButton } from '@/components/bookmark-button';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
+interface Episode {
+  id: string;
+  number: number;
+  title: string;
+  thumbnail: string | null;
+  duration: string | null;
 }
 
-export default async function AnimeDetailPage({ params }: PageProps) {
-  const { id } = await params;
+interface Anime {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  image: string;
+  coverImage: string | null;
+  rating: number;
+  year: number;
+  episodes: number;
+  duration: string | null;
+  status: string;
+  studio: string | null;
+  description: string;
+  genres: string[];
+  type: string;
+  episodeList: Episode[];
+}
 
-  const anime = await prisma.anime.findUnique({
-    where: { id },
-    include: {
-      episodeList: { orderBy: { number: 'asc' } },
-    },
-  });
+interface PageProps {
+  params: { id: string };
+}
 
-  if (!anime) notFound();
+export default function AnimeDetailPage({ params }: PageProps) {
+  const { id } = params;
+  const [anime, setAnime] = useState<Anime | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/anime/${id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) {
+          notFound();
+        } else {
+          setAnime(data);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, [id]);
+
+  const handleSyncEpisodes = async () => {
+    if (!anime) return;
+    setIsSyncing(true);
+    setSyncError(null);
+    
+    try {
+      const res = await fetch('/api/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync',
+          animeTitle: anime.title,
+          animeId: anime.id,
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.error) {
+        setSyncError(data.error);
+      } else {
+        // Refresh anime data
+        const refreshRes = await fetch(`/api/anime/${id}`);
+        const refreshData = await refreshRes.json();
+        setAnime(refreshData);
+      }
+    } catch (err) {
+      setSyncError('Gagal sync episode');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!anime) {
+    notFound();
+    return null;
+  }
 
   const statusColor =
     anime.status === 'Ongoing' ? 'bg-green-500/20 text-green-400' :
@@ -105,12 +188,30 @@ export default async function AnimeDetailPage({ params }: PageProps) {
             {/* Description */}
             <p className="text-sm text-muted mt-4 leading-relaxed line-clamp-4">{anime.description}</p>
 
-            {/* Watch Button */}
-            {anime.episodeList.length > 0 && (
-              <Link href={`/watch/${anime.id}/${anime.episodeList[0].number}`} className="inline-flex items-center gap-2 mt-5 px-6 py-3 bg-primary hover:bg-primary-hover text-white font-semibold rounded-full transition-colors">
-                <Play className="w-5 h-5 fill-current" />
-                Watch Now
-              </Link>
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3 mt-5">
+              {anime.episodeList.length > 0 && (
+                <Link href={`/watch/${anime.id}/${anime.episodeList[0].number}`} className="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary-hover text-white font-semibold rounded-full transition-colors">
+                  <Play className="w-5 h-5 fill-current" />
+                  Watch Now
+                </Link>
+              )}
+              <button
+                onClick={handleSyncEpisodes}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-2 px-4 py-3 bg-surface-light hover:bg-surface text-foreground font-medium rounded-full transition-colors disabled:opacity-50"
+              >
+                {isSyncing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                {isSyncing ? 'Syncing...' : 'Sync Episodes'}
+              </button>
+            </div>
+
+            {syncError && (
+              <p className="text-sm text-red-400 mt-2">{syncError}</p>
             )}
           </div>
         </div>
@@ -122,7 +223,21 @@ export default async function AnimeDetailPage({ params }: PageProps) {
           </h2>
 
           {anime.episodeList.length === 0 ? (
-            <p className="text-muted">Belum ada episode tersedia.</p>
+            <div className="text-center py-8">
+              <p className="text-muted mb-4">Belum ada episode tersedia.</p>
+              <button
+                onClick={handleSyncEpisodes}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isSyncing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                Sync from Consumet
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {anime.episodeList.map((ep) => (

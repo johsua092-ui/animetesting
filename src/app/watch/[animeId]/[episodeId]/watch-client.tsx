@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import PusherClient from 'pusher-js';
 import {
   ChevronLeft, MessageSquare, ThumbsUp, Share2,
-  SkipBack, SkipForward, Users, Wifi, WifiOff, Play,
+  SkipBack, SkipForward, Users, Wifi, WifiOff, Play, Loader2,
 } from 'lucide-react';
 
 interface EpisodeInfo {
@@ -17,6 +17,7 @@ interface EpisodeInfo {
   title: string;
   thumbnail: string | null;
   duration: string | null;
+  consumetId: string | null;
 }
 
 interface WatchClientProps {
@@ -25,6 +26,7 @@ interface WatchClientProps {
     number: number;
     title: string;
     videoUrl: string | null;
+    consumetId: string | null;
     animeId: string;
     animeName: string;
     episodes: EpisodeInfo[];
@@ -41,7 +43,7 @@ interface Comment {
 
 export function WatchClient({ episode }: WatchClientProps) {
   const router = useRouter();
-  const { animeId, animeName, episodes, number: currentNumber, videoUrl } = episode;
+  const { animeId, animeName, episodes, number: currentNumber, videoUrl: dbVideoUrl, consumetId } = episode;
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -49,12 +51,42 @@ export function WatchClient({ episode }: WatchClientProps) {
   const [onlineUsers, setOnlineUsers] = useState(1);
   const [isConnected, setIsConnected] = useState(true);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [isLoadingStream, setIsLoadingStream] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const socketId = useRef<string>(Math.random().toString(36).slice(2));
 
   const totalEpisodes = episodes.length;
   const prevEp = episodes.find((e) => e.number === currentNumber - 1);
   const nextEp = episodes.find((e) => e.number === currentNumber + 1);
+
+  // Fetch streaming URL from Consumet
+  useEffect(() => {
+    const episodeConsumetId = consumetId || episodes.find((e) => e.number === currentNumber)?.consumetId;
+    if (!episodeConsumetId) {
+      setStreamError('Episode ID tidak ditemukan di Consumet');
+      return;
+    }
+
+    setIsLoadingStream(true);
+    setStreamError(null);
+    
+    fetch(`/api/stream?action=watch&episodeId=${encodeURIComponent(episodeConsumetId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) {
+          setStreamError(data.error);
+        } else {
+          setStreamUrl(data.videoUrl);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch stream:', err);
+        setStreamError('Gagal memuat stream');
+      })
+      .finally(() => setIsLoadingStream(false));
+  }, [currentNumber, consumetId, episodes]);
 
   // Load initial comments
   useEffect(() => {
@@ -156,6 +188,8 @@ export function WatchClient({ episode }: WatchClientProps) {
     await fetch(`/api/comments/${commentId}/like`, { method: 'POST' }).catch(() => {});
   };
 
+  const finalVideoUrl = streamUrl || dbVideoUrl;
+
   return (
     <div className="min-h-screen bg-background pt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -177,19 +211,34 @@ export function WatchClient({ episode }: WatchClientProps) {
               animate={{ opacity: 1, y: 0 }}
               className="relative aspect-video bg-black rounded-xl overflow-hidden"
             >
-              {videoUrl ? (
-                <iframe
-                  src={videoUrl}
+              {isLoadingStream ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface">
+                  <Loader2 className="w-12 h-12 text-primary animate-spin mb-3" />
+                  <p className="text-muted">Memuat stream...</p>
+                </div>
+              ) : finalVideoUrl ? (
+                <video
+                  key={finalVideoUrl}
                   className="w-full h-full"
-                  allowFullScreen
-                  allow="autoplay; fullscreen"
+                  controls
+                  autoPlay
+                  playsInline
                   title={`${animeName} Episode ${currentNumber}`}
-                />
+                >
+                  <source src={finalVideoUrl} type="application/x-mpegURL" />
+                  Your browser does not support the video tag.
+                </video>
+              ) : streamError ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface">
+                  <Play className="w-16 h-16 text-muted mb-3" />
+                  <p className="text-muted">{streamError}</p>
+                  <p className="text-xs text-muted mt-1">Coba episode lain atau refresh halaman</p>
+                </div>
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface">
                   <Play className="w-16 h-16 text-muted mb-3" />
                   <p className="text-muted">Video tidak tersedia</p>
-                  <p className="text-xs text-muted mt-1">Tambahkan videoUrl ke episode ini</p>
+                  <p className="text-xs text-muted mt-1">Episode ini belum memiliki stream</p>
                 </div>
               )}
             </motion.div>

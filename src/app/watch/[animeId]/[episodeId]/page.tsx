@@ -29,6 +29,7 @@ export default async function WatchPage({ params }: PageProps) {
         number: episode.number,
         title: episode.title,
         videoUrl: episode.videoUrl,
+        consumetId: episode.consumetId,
         animeId: episode.animeId,
         animeName: episode.anime.title,
         episodes: episode.anime.episodeList.map((ep) => ({
@@ -37,6 +38,7 @@ export default async function WatchPage({ params }: PageProps) {
           title: ep.title,
           thumbnail: ep.thumbnail,
           duration: ep.duration,
+          consumetId: ep.consumetId,
         })),
       }}
     />

@@ -51,6 +51,7 @@ model Episode {
   thumbnail   String?
   duration    String?
   videoUrl    String?
+  consumetId  String?
   animeId     String
   views       Int      @default(0)
   createdAt   DateTime @default(now())

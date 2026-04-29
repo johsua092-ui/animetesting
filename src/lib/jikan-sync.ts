@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { searchAnime, getAnimeInfo, ConsumetEpisode } from '@/lib/consumet';
 
 const JIKAN_BASE = 'https://api.jikan.moe/v4';
 
@@ -134,5 +135,95 @@ export async function syncAll(): Promise<SyncResult> {
     synced: top.synced + seasonal.synced,
     errors: top.errors + seasonal.errors,
     total: top.total + seasonal.total,
+  };
+}
+
+export interface EpisodeSyncResult {
+  synced: number;
+  errors: number;
+}
+
+export async function syncEpisodesFromConsumet(animeId: string, animeTitle: string): Promise<EpisodeSyncResult> {
+  const result: EpisodeSyncResult = { synced: 0, errors: 0 };
+  
+  try {
+    const searchResults = await searchAnime(animeTitle);
+    if (searchResults.length === 0) {
+      console.error(`[jikan-sync] No Consumet results for: ${animeTitle}`);
+      return result;
+    }
+    
+    const consumetId = searchResults[0].id;
+    const info = await getAnimeInfo(consumetId);
+    
+    if (!info || !info.episodes.length) {
+      console.error(`[jikan-sync] No episodes found for: ${animeTitle}`);
+      return result;
+    }
+    
+    for (const ep of info.episodes) {
+      try {
+        await prisma.episode.upsert({
+          where: {
+            animeId_number: {
+              animeId,
+              number: ep.number,
+            },
+          },
+          update: {
+            title: ep.title || `Episode ${ep.number}`,
+            thumbnail: ep.image,
+            consumetId: ep.id,
+          },
+          create: {
+            animeId,
+            number: ep.number,
+            title: ep.title || `Episode ${ep.number}`,
+            thumbnail: ep.image,
+            consumetId: ep.id,
+          },
+        });
+        result.synced++;
+        
+        await delay(200);
+      } catch (err) {
+        console.error(`[jikan-sync] Error syncing episode ${ep.number}:`, err);
+        result.errors++;
+      }
+    }
+  } catch (err) {
+    console.error(`[jikan-sync] Fatal error syncing episodes for ${animeTitle}:`, err);
+  }
+  
+  return result;
+}
+
+export async function syncAllWithEpisodes(): Promise<{
+  anime: SyncResult;
+  episodes: EpisodeSyncResult;
+}> {
+  const animeResult = await syncAll();
+  
+  const allAnime = await prisma.anime.findMany({
+    select: { id: true, title: true },
+  });
+  
+  let totalEpisodesSynced = 0;
+  let totalEpisodeErrors = 0;
+  
+  for (const anime of allAnime) {
+    const epResult = await syncEpisodesFromConsumet(anime.id, anime.title);
+    totalEpisodesSynced += epResult.synced;
+    totalEpisodeErrors += epResult.errors;
+    
+    await delay(500);
+  }
+  
+  return {
+    anime: animeResult,
+    episodes: {
+      synced: totalEpisodesSynced,
+      errors: totalEpisodeErrors,
+    },
   };
 }
