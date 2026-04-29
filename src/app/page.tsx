@@ -132,7 +132,7 @@ export default function HomePage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {animeList.map((anime) => (
             <motion.div key={anime.malId || anime.id} whileHover={{ scale: 1.05 }} className="group">
-              <Link href={`/browse?q=${encodeURIComponent(anime.title)}`}>
+              <Link href={`/anime/${anime.malId}`}>
                 <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-surface">
                   <Image src={anime.image} alt={anime.title} fill className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
