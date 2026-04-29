@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Anime {
+  id          String    @id @default(cuid())
+  malId       Int?      @unique // MyAnimeList ID from Jikan API
+  title       String
+  subtitle    String?
+  slug        String    @unique
+  image       String
+  coverImage  String?
+  rating      Float     @default(0)
+  year        Int
+  episodes    Int       @default(0)
+  duration    String?
+  status      String    // Ongoing, Completed, Upcoming
+  studio      String?
+  description String    @db.Text
+  genres      String[]  // Array of genres
+  type        String    @default("TV") // TV, Movie, OVA, etc
+  views       Int       @default(0)
+  featured    Boolean   @default(false)
+  trending    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  episodeList Episode[]
+  comments    Comment[]
+  bookmarks   Bookmark[]
+  
+  @@index([malId])
+  @@index([slug])
+  @@index([status])
+  @@index([trending])
+  @@index([featured])
+  @@index([type])
+  @@index([year])
+  @@index([rating])
+}
+
+model Episode {
+  id          String   @id @default(cuid())
+  number      Int
+  title       String
+  thumbnail   String?
+  duration    String?
+  videoUrl    String?
+  animeId     String
+  views       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  anime       Anime    @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  comments    Comment[]
+  
+  @@unique([animeId, number])
+  @@index([animeId])
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  username      String     @unique
+  name          String?
+  image         String?
+  role          String     @default("USER") // USER, ADMIN
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  comments      Comment[]
+  bookmarks     Bookmark[]
+  watchHistory  WatchHistory[]
+  sessions      Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  animeId   String?
+  episodeId String?
+  parentId  String?
+  likes     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anime     Anime?    @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  episode   Episode?  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+  
+  @@index([animeId])
+  @@index([episodeId])
+  @@index([userId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  animeId   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anime     Anime    @relation(fields: [animeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, animeId])
+}
+
+model WatchHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  animeId     String
+  episodeId   String
+  progress    Float    @default(0) // Watch progress percentage
+  completed   Boolean  @default(false)
+  lastWatched DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, animeId, episodeId])
+  @@index([userId])
+}
+
+model LiveViewer {
+  id        String   @id @default(cuid())
+  socketId  String   @unique
+  animeId   String?
+  episodeId String?
+  userId    String?
+  joinedAt  DateTime @default(now())
+  lastPing  DateTime @default(now())
+
+  @@index([animeId, episodeId])
+  @@index([socketId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // NEW_EPISODE, COMMENT_REPLY, etc
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  data      Json?    // Additional data
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
